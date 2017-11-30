@@ -6,8 +6,30 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <link rel="icon" href="http://www.glowscript.org/docs/VPythonDocs/images/graph.png">
     <title>Graphs Proto</title>
+    <style>
+        body, html {
+            width: 100vw;
+            height: 100vh;
+        }
+        #root {                  
+            width: 500px;
+            height: 300px;
+            margin: 50px auto 0;
+            background-color: #eee;
+        }
+        .viz {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
 </head>
 <body>
-    
+    <main id="root">
+        <div class="viz">
+            <svg class="viz__graph js-graph"></svg>
+        </div>
+    </main>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="./graphs.js"></script>
 </body>
 </html>
