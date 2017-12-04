@@ -9,6 +9,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "browserify": "^14.5.0",
+    "d3fc": "^13.1.1",
+    "d3fc-discontinuous-scale": "^2.0.5",
     "http-server": "^0.10.0"
   },
   "devDependencies": {

@@ -8,6 +8,7 @@ module.exports = {
         "prefer-template": 0,
         "prefer-arrow-callback": 0,
         "vars-on-top": 0,
+        "prefer-rest-params": 0
     },
     "env": {        
         "browser": 1
