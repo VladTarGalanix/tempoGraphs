@@ -258,42 +258,6 @@
   }
   /* </HELPER FUNCTIONS> */
 
-
-  /* <ACTUAL GRAPH REPRESENTATION> */
-  function Graph(params) {
-    return Object.assign(this, params);
-  }
-  Graph.prototype = {
-    append: function appendNewInstance(dataset) {
-      this.container
-        .append('path')
-        .attr('d', this.lineFunction(dataset))
-        .attr('stroke', this.color || 'black')
-        .attr('stroke-width', this.strokeWidth || 2)
-        .attr('fill', this.fill || 'none')
-        .attr('class', 'graph-type__' + this.type)
-        .style('opacity', this.opacityVal || (this.hidden ? 0 : 1));
-    },
-    update: function updateOldInstance(dataset) {
-      var transitionLineChart = function transitionLineChart(line) {
-        return function actualTransition() {
-          var previous = d3.select(this).attr('d');
-          var current = line(dataset);
-          return d3.interpolate(previous, current);
-        };
-      };
-
-      this.container
-        .select('.graph-type__' + this.type)
-        .transition()
-        .duration(this.duration)
-        .attrTween('d', transitionLineChart(this.lineFunction))
-        .style('opacity', this.opacityVal || (this.hidden ? 0 : 1));
-    }
-  };
-  /* </ACTUAL GRAPH REPRESENTATION> */
-
-
   /* <LINE CHART UI CLASS> */
   function LineChart(svgSelector, svgId) {
     if (!svgSelector) {
@@ -363,18 +327,20 @@
           .attr('stroke-width', 2)
           .style('opacity', 0);
     },
-    createGraphInstance: function instantiateNewGraph(dataset) {
-      this.graphInstance = new Graph({
-        type: 'video-metadata',
-        color: 'turquoise',
-        hidden: false,
-        duration: this.duration,
-        lineFunction: d3.line()
-          .x(this.xOffset)
-          .y(this.yOffset),
-        container: this.gRef,
-      });
-      this.graphInstance.append(dataset);
+    createLineChart: function instantiateNewGraph(dataset) {
+      this.line = d3.line()
+        .x(this.xOffset)
+        .y(this.yOffset);
+
+
+      this.lineChart =
+        this.gRef
+          .append('path')
+          .attr('d', this.line(dataset))
+          .attr('stroke', 'turquoise')
+          .attr('stroke-width', 2)
+          .attr('fill', 'none');
+
       this.wasGraphRendered = true;
     },
     createOffsets: function createOffsetsForGraphPoints() {
@@ -387,8 +353,19 @@
       }.bind(this);
     },
     // UPDATE
-    updateGraphInstance: function updateInstantiatedGraph(dataset) {
-      this.graphInstance.update(dataset);
+    updateLineChart: function updateInstantiatedGraph(dataset) {
+      var transitionLineChart = function transitionLineChart(line) {
+        return function actualTransition() {
+          var previous = d3.select(this).attr('d');
+          var current = line(dataset);
+          return d3.interpolate(previous, current);
+        };
+      };
+
+      this.lineChart
+        .transition()
+        .duration(this.duration)
+        .attrTween('d', transitionLineChart(this.line));
     },
     // CREATE AND UPDATE
     makeScales: function adaptScalesForDataset(data, fullWidth, fullHeight) {
@@ -675,12 +652,12 @@
       this.appendAxises(data, fullHeight);
 
       if (this.wasGraphRendered) {
-        this.updateGraphInstance(data.statusLogs);
+        this.updateLineChart(data.statusLogs);
       } else {
         this.createOffsets();
         this.createTooltip();
         this.createHorLine();
-        this.createGraphInstance(data.statusLogs);
+        this.createLineChart(data.statusLogs);
       }
 
       this.renderGaps(data.statusLogs);
