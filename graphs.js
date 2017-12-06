@@ -1,7 +1,3 @@
-var discontinuityRange = require('d3fc-discontinuous-scale');
-
-console.log(discontinuityRange);
-
 (function myModule(d3, fc) {
   /* <TEST DATASET> */
   var exampleData = {
@@ -32,39 +28,39 @@ console.log(discontinuityRange);
       current_time: 81
     }, {
       status: 'pause',
-      time: '30.11.2017 18:7:48',
+      time: '30.11.2017 18:7:49',
       current_time: 82
     }, {
       status: 'play',
-      time: '30.11.2017 18:7:48',
+      time: '30.11.2017 18:7:50',
       current_time: 115
     }, {
       status: 'timeupdate',
-      time: '30.11.2017 18:7:48',
+      time: '30.11.2017 18:7:51',
       current_time: 116
     }, {
       status: 'timeupdate',
-      time: '30.11.2017 18:7:48',
+      time: '30.11.2017 18:7:52',
       current_time: 117
     }, {
       status: 'timeupdate',
-      time: '30.11.2017 18:7:48',
+      time: '30.11.2017 18:7:53',
       current_time: 118
     }, {
       status: 'timeupdate',
-      time: '30.11.2017 18:7:48',
+      time: '30.11.2017 18:7:54',
       current_time: 118
     }, {
       status: 'timeupdate',
-      time: '30.11.2017 18:7:49',
+      time: '30.11.2017 18:7:55',
       current_time: 119
     }, {
       status: 'timeupdate',
-      time: '30.11.2017 18:7:50',
+      time: '30.11.2017 18:7:56',
       current_time: 120
     }, {
       status: 'ended',
-      time: '30.11.2017 18:7:51',
+      time: '30.11.2017 18:7:57',
       current_time: 120
     }]
   };
@@ -374,9 +370,6 @@ console.log(discontinuityRange);
         hidden: false,
         duration: this.duration,
         lineFunction: d3.line()
-          .defined(function shouldPointRender(item) {
-            return item.status !== 'pause';
-          })
           .x(this.xOffset)
           .y(this.yOffset),
         container: this.gRef,
@@ -552,12 +545,15 @@ console.log(discontinuityRange);
       var radius = 6;
       var onHoverEvtHandler = (function onHoverEvtHandler(that) {
         return function curryThatArg(radiusVal) {
-          return function inner(log) {
+          return function doActualWork(log) {
             var xPos = this.getAttribute('cx');
             var yPos = this.getAttribute('cy');
             var evt = d3.event;
 
-            that.toggleHorizontalLine(yPos, evt);
+            if (log.status === 'play' || log.status === 'pause') {
+              that.toggleHorizontalLine(yPos, evt);
+            }
+
             that.toggleTooltip(xPos, yPos, evt, log);
 
             d3.select(this)
@@ -574,19 +570,26 @@ console.log(discontinuityRange);
         };
       }
 
-      var circleAll =
-        this.gRef
+      if (!this.circleGroup) {
+        this.circleGroup =
+          this.gRef
+            .append('g')
+            .classed('circle-group', true);
+      }
+
+      var circles =
+        this.circleGroup
           .selectAll('circle')
           .data(dataset);
 
-      circleAll
+      circles
         .exit()
         .remove();
 
-      circleAll
+      circles
         .enter()
         .append('circle')
-        .merge(circleAll)
+        .merge(circles)
         .on('mouseover', onHoverEvtHandler(determineRadius(radius * 2)))
         .on('mouseout', onHoverEvtHandler(determineRadius(radius)))
         .transition()
@@ -617,6 +620,48 @@ console.log(discontinuityRange);
         .attr('cy', this.yOffset)
         .style('cursor', 'pointer');
     },
+    renderGaps: function renderGaps(dataset) {
+      var gapsSel;
+      var gapIntervals = [];
+      var gapLine = d3.line()
+        .x(this.xOffset)
+        .y(this.yOffset);
+
+      dataset.forEach(function checkForPauseStatus(log, index) {
+        if (log.status === 'pause') {
+          gapIntervals.push([log, dataset[index + 1]]);
+        }
+      });
+
+      if (!this.gapGroup) {
+        this.gapGroup =
+          this.gRef
+            .append('g')
+            .classed('gap-group', true);
+      }
+
+      gapsSel =
+        this.gapGroup
+          .selectAll('.js-gap')
+          .data(gapIntervals);
+
+      gapsSel
+        .exit()
+        .remove();
+
+      gapsSel
+        .enter()
+        .append('path')
+        .merge(gapsSel)
+        .classed('js-gap', true)
+        .style('stroke', getComputedStyle(this.svgRef.node().parentElement).backgroundColor)
+        .style('stroke-width', 4)
+        .transition()
+        .duration(this.duration)
+        .attr('d', function applyGapInterval(gapInterval) {
+          return gapLine(gapInterval);
+        });
+    },
     render: function render(data) {
       if (!data || Object.prototype.toString.call(data) !== '[object Object]') {
         throw Error('Dataset doesn\'t exist or not of the [object Object] type');
@@ -638,6 +683,7 @@ console.log(discontinuityRange);
         this.createGraphInstance(data.statusLogs);
       }
 
+      this.renderGaps(data.statusLogs);
       this.renderCircles(data.statusLogs);
     },
     truncate: function shoudlTtruncateLineChart(data) {
@@ -662,9 +708,9 @@ console.log(discontinuityRange);
   window.addEventListener('load', function initLineChart() {
     var line = new LineChart('.js-graph', 'video-stats');
     line.render(dataWithTooMuchPause);
-    // setTimeout(function updateExample() {
-    //   line.render(exampleData);
-    // }, 1000);
+    setTimeout(function updateExample() {
+      line.render(exampleData);
+    }, 1000);
   });
   /* </LINE CHART UI CLASS> */
 }(d3, fc));
