@@ -158,39 +158,39 @@
       current_time: 113
     }, {
       status: 'timeupdate',
-      time: '30.11.2017 18:7:48',
+      time: '30.11.2017 18:7:49',
       current_time: 114
     }, {
       status: 'timeupdate',
-      time: '30.11.2017 18:7:48',
+      time: '30.11.2017 18:7:50',
       current_time: 115
     }, {
       status: 'timeupdate',
-      time: '30.11.2017 18:7:48',
+      time: '30.11.2017 18:7:51',
       current_time: 116
     }, {
       status: 'timeupdate',
-      time: '30.11.2017 18:7:48',
+      time: '30.11.2017 18:7:52',
       current_time: 117
     }, {
       status: 'timeupdate',
-      time: '30.11.2017 18:7:48',
+      time: '30.11.2017 18:7:53',
       current_time: 118
     }, {
       status: 'timeupdate',
-      time: '30.11.2017 18:7:48',
+      time: '30.11.2017 18:7:54',
       current_time: 118
     }, {
       status: 'timeupdate',
-      time: '30.11.2017 18:7:49',
+      time: '30.11.2017 18:7:55',
       current_time: 119
     }, {
       status: 'timeupdate',
-      time: '30.11.2017 18:7:50',
+      time: '30.11.2017 18:7:56',
       current_time: 120
     }, {
       status: 'ended',
-      time: '30.11.2017 18:7:51',
+      time: '30.11.2017 18:7:57',
       current_time: 120
     }]
   };
@@ -297,11 +297,12 @@
     },
     // CREATE
     createTooltip: function createTooltip() {
-      this.tooltip = d3.select(this.svgRef.node().parentElement)
-        .append('div')
-        .classed('tooltip', true)
-        .style('opacity', 0)
-        .style('transition', 'opacity .5s linear');
+      this.tooltip =
+        d3.select(this.svgRef.node().parentElement)
+          .append('div')
+          .classed('tooltip', true)
+          .style('opacity', 0)
+          .style('transition', 'opacity .5s linear');
 
       this.tooltip
         .append('p')
@@ -373,7 +374,7 @@
 
       if (rangesToTruncate.length !== 0) {
         this.xScale = fc.scaleDiscontinuous(d3.scaleTime())
-          .discontinuityProvider(fc.discontinuityRange(rangesToTruncate));
+          .discontinuityProvider(fc.discontinuityRange.apply(fc, rangesToTruncate));
       } else {
         this.xScale = d3.scaleTime();
       }
@@ -392,21 +393,21 @@
         ])
         .range([fullHeight, 0]);
     },
-    appendAxises: function appendAxises(dataset, fullHeight) {
+    appendAxises: function appendAxises(data, fullHeight) {
       function getRelativeTime(log) {
         return turnSecondsIntoDate(log.current_time);
       }
       function getAbsoluteTime(log) {
         return turnStrIntoDate(log.time);
       }
-      function determineTickValues(dataset0, getTimeCallback) {
-        var userValues = dataset0.statusLogs.map(getTimeCallback);
+      function calcTickValues(data0, getTimeCallback) {
         var randomValues = formTickValues(
           3,
           0,
-          d3.min(dataset0.statusLogs, getTimeCallback).getTime(),
-          d3.max(dataset0.statusLogs, getTimeCallback).getTime(),
+          d3.min(data0.statusLogs, getTimeCallback).getTime(),
+          d3.max(data0.statusLogs, getTimeCallback).getTime()
         );
+        var userValues = data0.statusLogs.map(getTimeCallback);
 
         if (randomValues.length > 5) {
           return randomValues;
@@ -414,11 +415,62 @@
 
         return userValues;
       }
-      function determineXTickValues(dataset0) {
-        return determineTickValues(dataset0, getAbsoluteTime);
+      function filterIntervalsOut(intervals) {
+        var alteredData = JSON.parse(JSON.stringify(data));
+
+
+        // var statusLogsAbsDatesInMillis = alteredData.statusLogs.map(function mapStrToDate(log) {
+        //   return turnStrIntoDate(log.time).getTime();
+        // });
+        // intervals.forEach(function searchForBeginIntervalVal(interval) {
+        //   var beginIndex = statusLogsAbsDatesInMillis.indexOf(interval[0].getTime());
+        //   if (beginIndex !== -1) {
+        //     alteredData.statusLogs.splice(beginIndex, 2);
+        //   }
+        // });
+        
+        // var newStatusLogs = alteredData.statusLogs.filter(function getRidOfIntervalVals(log) {
+        //   return intervals.reduce(function isLogOutOfInterval(acc, interval) {
+             
+        //   });
+        // });
+        
+        // var statusLogsAbsDatesInMillis = alteredData.statusLogs.map(function mapStrToDate(log) {
+        //   return turnStrIntoDate(log.time).getTime();
+        // });
+        // var begin = 0;
+        // var end;
+
+        // intervals.forEach(function findBoundries(interval) {
+        //   end = statusLogsAbsDatesInMillis.indexOf(interval[0].getTime());
+
+        //   newStatusLogs = newStatusLogs.concat(alteredData.statusLogs.slice(begin, end));
+
+        //   begin = statusLogsAbsDatesInMillis.indexOf(interval[1].getTime());
+        // });
+
+
+        // if (end !== statusLogsAbsDatesInMillis.length) { // or statusLogsAbsDatesInMillis.length -1
+        //   newStatusLogs = newStatusLogs.concat(alteredData.statusLogs.slice(end + 1));
+        // }
+
+        // alteredData.statusLogs = newStatusLogs;
+
+        console.log(alteredData);
+        return alteredData;
       }
-      function determineYTickValues(dataset0) {
-        var alteredDataset = JSON.parse(JSON.stringify(dataset0));
+      function calcXTickValues(intervalsToTruncate) {
+        if (intervalsToTruncate.length !== 0) {
+          return calcTickValues(
+            filterIntervalsOut(intervalsToTruncate),
+            getAbsoluteTime
+          );
+        }
+
+        return calcTickValues(data, getAbsoluteTime);
+      }
+      function calcYTickValues() {
+        var alteredDataset = JSON.parse(JSON.stringify(data));
 
         // if the first log is not the start of the video
         // we'll need to insert 00:00 manually to draw axises nicely
@@ -440,16 +492,15 @@
           });
         }
 
-        return determineTickValues(alteredDataset, getRelativeTime);
+        return calcTickValues(alteredDataset, getRelativeTime);
       }
 
       var yAxisGen = d3.axisLeft(this.yScale)
-        .tickValues(determineYTickValues(dataset))
+        .tickValues(calcYTickValues())
         .tickFormat(d3.timeFormat('%M:%S'));
 
-
       var xAxisGen = d3.axisBottom(this.xScale)
-        .tickValues(determineXTickValues(dataset))
+        .tickValues(calcXTickValues(this.truncate(data)))
         .tickFormat(d3.timeFormat('%H:%M:%S'));
 
       // Y AXIS
@@ -663,7 +714,7 @@
       this.renderGaps(data.statusLogs);
       this.renderCircles(data.statusLogs);
     },
-    truncate: function shoudlTtruncateLineChart(data) {
+    truncate: function shouldTruncateLineChart(data) {
       var rangesToTruncate = [];
 
       data.statusLogs.forEach(function checkPauseLength(item, index) {
@@ -685,9 +736,9 @@
   window.addEventListener('load', function initLineChart() {
     var line = new LineChart('.js-graph', 'video-stats');
     line.render(dataWithTooMuchPause);
-    setTimeout(function updateExample() {
-      line.render(exampleData);
-    }, 1000);
+    // setTimeout(function updateExample() {
+    //   line.render(exampleData);
+    // }, 1000);
   });
   /* </LINE CHART UI CLASS> */
 }(d3, fc));
