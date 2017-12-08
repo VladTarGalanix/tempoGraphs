@@ -344,9 +344,37 @@
 
       this.wasGraphRendered = true;
     },
-    createOffsets: function createOffsetsForGraphPoints() {
-      this.xOffset = function calcXOffset(log) {
-        return this.xScale(turnStrIntoDate(log.time));
+    createOffsets: function createOffsetsForGraphPoints(data, additionalOffsetVal) {
+      this.xOffset = function calcXOffset(log, index) {
+        // this is done to provide additional padding of everything that uses this.xOffset
+        // this is only applied if there's a gap between play and pause on the graph
+        var regularOffset = this.xScale(turnStrIntoDate(log.time));
+        var additionalOffset = 0;
+        switch (log.status) {
+          case 'play': {
+            var prevLog = data.statusLogs[index - 1] || null;
+            if (
+              (!!prevLog && prevLog.status === 'pause')
+              && this.isGapLargerThanDuration(log.time, prevLog.time, data.video_duration)
+            ) {
+              additionalOffset = additionalOffsetVal;
+            }
+            break;
+          }
+          case 'pause': {
+            var nextLog = data.statusLogs[index + 1] || null;
+            if (
+              (!!nextLog && nextLog.status === 'play')
+              && this.isGapLargerThanDuration(log.time, nextLog.time, data.video_duration)
+            ) {
+              additionalOffset = -Math.abs(additionalOffsetVal);
+            }
+            break;
+          }
+          default:
+            // 'ended' or 'timeupdate' - do nothing
+        }
+        return regularOffset + additionalOffset;
       }.bind(this);
 
       this.yOffset = function calcYOffset(log) {
@@ -369,9 +397,7 @@
         .attrTween('d', transitionLineChart(this.line));
     },
     // CREATE AND UPDATE
-    makeScales: function adaptScalesForDataset(data, fullWidth, fullHeight) {
-      var rangesToTruncate = this.truncate(data);
-
+    makeScales: function adaptScalesForDataset(data, fullWidth, fullHeight, rangesToTruncate) {
       if (rangesToTruncate.length !== 0) {
         this.xScale = fc.scaleDiscontinuous(d3.scaleTime())
           .discontinuityProvider(fc.discontinuityRange.apply(fc, rangesToTruncate));
@@ -393,21 +419,36 @@
         ])
         .range([fullHeight, 0]);
     },
-    appendAxises: function appendAxises(data, fullHeight) {
+    appendAxises: function appendAxises(data, fullHeight, rangesToTruncate) {
       function getRelativeTime(log) {
         return turnSecondsIntoDate(log.current_time);
       }
       function getAbsoluteTime(log) {
         return turnStrIntoDate(log.time);
       }
-      function calcTickValues(data0, getTimeCallback) {
-        var randomValues = formTickValues(
-          3,
-          0,
-          d3.min(data0.statusLogs, getTimeCallback).getTime(),
-          d3.max(data0.statusLogs, getTimeCallback).getTime()
-        );
-        var userValues = data0.statusLogs.map(getTimeCallback);
+      function calcTickValues(dataset, getTimeCallback) {
+        var randomValues = [];
+        var userValues = [];
+
+        if (Object.prototype.toString.call(dataset[0]) === '[object Array]') {
+          dataset.forEach(function calcTicks(item) {
+            randomValues = randomValues.concat(formTickValues(
+              3,
+              0,
+              d3.min(item, getTimeCallback).getTime(),
+              d3.max(item, getTimeCallback).getTime()
+            ));
+            userValues = userValues.concat(item.map(getTimeCallback));
+          });
+        } else {
+          randomValues = formTickValues(
+            3,
+            0,
+            d3.min(dataset, getTimeCallback).getTime(),
+            d3.max(dataset, getTimeCallback).getTime()
+          );
+          userValues = dataset.map(getTimeCallback);
+        }
 
         if (randomValues.length > 5) {
           return randomValues;
@@ -416,58 +457,33 @@
         return userValues;
       }
       function filterIntervalsOut(intervals) {
-        var alteredData = JSON.parse(JSON.stringify(data));
+        var statusLogsInMillis = data.statusLogs.map(function mapStrToDate(log) {
+          return turnStrIntoDate(log.time).getTime();
+        });
+        var dataset = [];
+        var startIndex = 0;
+        var endIndex;
 
+        intervals.forEach(function separateIntervals(interval) {
+          endIndex = statusLogsInMillis.indexOf(interval[0].getTime());
+          dataset.push(data.statusLogs.slice(startIndex, endIndex));
+          startIndex = statusLogsInMillis.indexOf(interval[1].getTime());
+        });
 
-        // var statusLogsAbsDatesInMillis = alteredData.statusLogs.map(function mapStrToDate(log) {
-        //   return turnStrIntoDate(log.time).getTime();
-        // });
-        // intervals.forEach(function searchForBeginIntervalVal(interval) {
-        //   var beginIndex = statusLogsAbsDatesInMillis.indexOf(interval[0].getTime());
-        //   if (beginIndex !== -1) {
-        //     alteredData.statusLogs.splice(beginIndex, 2);
-        //   }
-        // });
-        
-        // var newStatusLogs = alteredData.statusLogs.filter(function getRidOfIntervalVals(log) {
-        //   return intervals.reduce(function isLogOutOfInterval(acc, interval) {
-             
-        //   });
-        // });
-        
-        // var statusLogsAbsDatesInMillis = alteredData.statusLogs.map(function mapStrToDate(log) {
-        //   return turnStrIntoDate(log.time).getTime();
-        // });
-        // var begin = 0;
-        // var end;
-
-        // intervals.forEach(function findBoundries(interval) {
-        //   end = statusLogsAbsDatesInMillis.indexOf(interval[0].getTime());
-
-        //   newStatusLogs = newStatusLogs.concat(alteredData.statusLogs.slice(begin, end));
-
-        //   begin = statusLogsAbsDatesInMillis.indexOf(interval[1].getTime());
-        // });
-
-
-        // if (end !== statusLogsAbsDatesInMillis.length) { // or statusLogsAbsDatesInMillis.length -1
-        //   newStatusLogs = newStatusLogs.concat(alteredData.statusLogs.slice(end + 1));
-        // }
-
-        // alteredData.statusLogs = newStatusLogs;
-
-        console.log(alteredData);
-        return alteredData;
-      }
-      function calcXTickValues(intervalsToTruncate) {
-        if (intervalsToTruncate.length !== 0) {
-          return calcTickValues(
-            filterIntervalsOut(intervalsToTruncate),
-            getAbsoluteTime
-          );
+        if (startIndex !== -1) {
+          dataset.push(data.statusLogs.slice(startIndex));
         }
 
-        return calcTickValues(data, getAbsoluteTime);
+        return dataset;
+      }
+      function calcXTickValues(intervalsToTruncate) {
+        var dataset = data.statusLogs.slice();
+
+        if (intervalsToTruncate.length !== 0) {
+          dataset = filterIntervalsOut(intervalsToTruncate);
+        }
+
+        return calcTickValues(dataset, getAbsoluteTime);
       }
       function calcYTickValues() {
         var alteredDataset = JSON.parse(JSON.stringify(data));
@@ -492,7 +508,7 @@
           });
         }
 
-        return calcTickValues(alteredDataset, getRelativeTime);
+        return calcTickValues(alteredDataset.statusLogs, getRelativeTime);
       }
 
       var yAxisGen = d3.axisLeft(this.yScale)
@@ -500,7 +516,7 @@
         .tickFormat(d3.timeFormat('%M:%S'));
 
       var xAxisGen = d3.axisBottom(this.xScale)
-        .tickValues(calcXTickValues(this.truncate(data)))
+        .tickValues(calcXTickValues(rangesToTruncate))
         .tickFormat(d3.timeFormat('%H:%M:%S'));
 
       // Y AXIS
@@ -520,7 +536,6 @@
           .attr('transform', 'translate(0, ' + fullHeight + ')')
           .attr('class', 'x-axis');
       }
-
       xAxis
         .transition()
         .duration(this.duration)
@@ -569,29 +584,27 @@
         .duration(this.duration)
         .style('opacity', opacityVal);
     },
-    renderCircles: function renderCircles(dataset) {
-      var radius = 6;
-      var onHoverEvtHandler = (function onHoverEvtHandler(that) {
-        return function curryThatArg(radiusVal) {
+    renderCircles: function renderCircles(dataset, radius) {
+      var onHoverEvtHandler = (function onHoverEvtHandler(_this) {
+        return function currythis(radiusVal) {
           return function doActualWork(log) {
             var xPos = this.getAttribute('cx');
             var yPos = this.getAttribute('cy');
             var evt = d3.event;
 
             if (log.status === 'play' || log.status === 'pause') {
-              that.toggleHorizontalLine(yPos, evt);
+              _this.toggleHorizontalLine(yPos, evt);
             }
 
-            that.toggleTooltip(xPos, yPos, evt, log);
+            _this.toggleTooltip(xPos, yPos, evt, log);
 
             d3.select(this)
               .transition()
-              .duration(that.duration)
+              .duration(_this.duration)
               .attr('r', radiusVal);
           };
         };
       }(this));
-
       function determineRadius(radiusVal) {
         return function inner(log) {
           return log.status !== 'timeupdate' ? radiusVal + (radiusVal / 2) : radiusVal;
@@ -652,7 +665,10 @@
       var gapsSel;
       var gapIntervals = [];
       var gapLine = d3.line()
-        .x(this.xOffset)
+        .x(function xOffsetWrapper(log) {
+          var actualIndex = dataset.indexOf(log);
+          return this.xOffset(log, actualIndex);
+        }.bind(this))
         .y(this.yOffset);
 
       dataset.forEach(function checkForPauseStatus(log, index) {
@@ -665,7 +681,7 @@
         this.gapGroup =
           this.gRef
             .append('g')
-            .classed('gap-group', true);
+            .classed('js-gap-group', true);
       }
 
       gapsSel =
@@ -690,46 +706,98 @@
           return gapLine(gapInterval);
         });
     },
+    renderVerticalLines: function renderVerticalLines(dataset, intervals) {
+      var translateOnX = function moveVerticalLineOnX(interval) {
+        var datasetInMillis = dataset.map(function mapStrToDate(log) {
+          return turnStrIntoDate(log.time).getTime();
+        });
+        var logIndex = datasetInMillis.indexOf(interval[0].getTime());
+        return this.xOffset(dataset[logIndex]);
+      }.bind(this);
+      var margin = this.margin;
+      var verticalLineSel;
+
+      if (!this.verticalLineGroup) {
+        this.verticalLineGroup =
+          this.gRef
+            .append('g')
+            .classed('js-vertical-line-group', true);
+      }
+
+      verticalLineSel =
+        this.verticalLineGroup
+          .selectAll('.js-vertical-line')
+          .data(intervals);
+
+      verticalLineSel
+        .exit()
+        .remove();
+
+      verticalLineSel
+        .enter()
+        .append('line')
+        .merge(verticalLineSel)
+        .classed('js-vertical-line', true)
+        .attr('x1', translateOnX)
+        .attr('x2', translateOnX)
+        .attr('y1', 0)
+        .attr('y2', this.height - margin.top - margin.bottom)
+        .attr('stroke', 'grey')
+        .style('stroke-dasharray', '5, 5')
+        .style('stroke-width', 2);
+    },
     render: function render(data) {
       if (!data || Object.prototype.toString.call(data) !== '[object Object]') {
-        throw Error('Dataset doesn\'t exist or not of the [object Object] type');
+        throw Error('Dataset doesn\'t exist or is not of the [object Object] type');
       }
 
       var margin = this.margin;
       var fullWidth = this.width - margin.left - margin.right;
       var fullHeight = this.height - margin.top - margin.bottom;
+      var radius = 6;
+      var rangesToTruncate = this.truncate(data);
 
-      this.makeScales(data, fullWidth, fullHeight);
-      this.appendAxises(data, fullHeight);
+      this.makeScales(data, fullWidth, fullHeight, rangesToTruncate);
+      this.appendAxises(data, fullHeight, rangesToTruncate);
 
       if (this.wasGraphRendered) {
         this.updateLineChart(data.statusLogs);
       } else {
-        this.createOffsets();
+        this.createOffsets(data, radius * 2);
         this.createTooltip();
         this.createHorLine();
         this.createLineChart(data.statusLogs);
       }
 
       this.renderGaps(data.statusLogs);
-      this.renderCircles(data.statusLogs);
+      this.renderCircles(data.statusLogs, radius);
+
+      if (rangesToTruncate.length !== 0) {
+        this.renderVerticalLines(data.statusLogs, rangesToTruncate);
+      }
     },
     truncate: function shouldTruncateLineChart(data) {
       var rangesToTruncate = [];
-
-      data.statusLogs.forEach(function checkPauseLength(item, index) {
-        if (item.status === 'pause' && data.statusLogs[index + 1]) {
-          var pausePoint = turnStrIntoDate(item.time);
-          var nextPoint = turnStrIntoDate(data.statusLogs[index + 1].time);
-          var timePassed = (nextPoint.getTime() - pausePoint.getTime()) / 1000;
-
-          if (timePassed >= data.video_duration) {
-            rangesToTruncate.push([pausePoint, nextPoint]);
+      data.statusLogs.forEach(function checkPauseLength(log, index) {
+        if (log.status === 'pause' && data.statusLogs[index + 1]) {
+          if (this.isGapLargerThanDuration(
+            log.time,
+            data.statusLogs[index + 1].time,
+            data.video_duration
+          )) {
+            rangesToTruncate.push([
+              turnStrIntoDate(log.time),
+              turnStrIntoDate(data.statusLogs[index + 1].time)
+            ]);
           }
         }
-      });
-
+      }.bind(this));
       return rangesToTruncate;
+    },
+    isGapLargerThanDuration: function isGapLargerThanDur(currLogDateStr, compLogDateStr, duration) {
+      var compLogDate = turnStrIntoDate(compLogDateStr);
+      var currLogDate = turnStrIntoDate(currLogDateStr);
+      return (Math.abs(currLogDate.getTime() - compLogDate.getTime())) / 1000 >= duration;
     }
   };
 
