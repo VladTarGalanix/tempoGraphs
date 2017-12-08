@@ -329,11 +329,6 @@
           .style('opacity', 0);
     },
     createLineChart: function instantiateNewGraph(dataset) {
-      this.line = d3.line()
-        .x(this.xOffset)
-        .y(this.yOffset);
-
-
       this.lineChart =
         this.gRef
           .append('path')
@@ -343,43 +338,6 @@
           .attr('fill', 'none');
 
       this.wasGraphRendered = true;
-    },
-    createOffsets: function createOffsetsForGraphPoints(data, additionalOffsetVal) {
-      this.xOffset = function calcXOffset(log, index) {
-        // this is done to provide additional padding of everything that uses this.xOffset
-        // this is only applied if there's a gap between play and pause on the graph
-        var regularOffset = this.xScale(turnStrIntoDate(log.time));
-        var additionalOffset = 0;
-        switch (log.status) {
-          case 'play': {
-            var prevLog = data.statusLogs[index - 1] || null;
-            if (
-              (!!prevLog && prevLog.status === 'pause')
-              && this.isGapLargerThanDuration(log.time, prevLog.time, data.video_duration)
-            ) {
-              additionalOffset = additionalOffsetVal;
-            }
-            break;
-          }
-          case 'pause': {
-            var nextLog = data.statusLogs[index + 1] || null;
-            if (
-              (!!nextLog && nextLog.status === 'play')
-              && this.isGapLargerThanDuration(log.time, nextLog.time, data.video_duration)
-            ) {
-              additionalOffset = -Math.abs(additionalOffsetVal);
-            }
-            break;
-          }
-          default:
-            // 'ended' or 'timeupdate' - do nothing
-        }
-        return regularOffset + additionalOffset;
-      }.bind(this);
-
-      this.yOffset = function calcYOffset(log) {
-        return this.yScale(turnSecondsIntoDate(log.current_time));
-      }.bind(this);
     },
     // UPDATE
     updateLineChart: function updateInstantiatedGraph(dataset) {
@@ -418,6 +376,50 @@
           turnSecondsIntoDate(data.video_duration)
         ])
         .range([fullHeight, 0]);
+    },
+    makeOffsets: function makeOffsetsForGraphPoints(data, additionalOffsetVal) {
+      this.xOffset = function calcXOffset(log, index) {
+        // this is done to provide additional padding of everything that uses this.xOffset
+        // this is only applied if there's a gap between play and pause on the graph
+        var regularOffset = this.xScale(turnStrIntoDate(log.time));
+        var additionalOffset = 0;
+        switch (log.status) {
+          case 'play': {
+            var prevLog = data.statusLogs[index - 1] || null;
+            if (
+              (!!prevLog && prevLog.status === 'pause')
+              && this.isGapLargerThanDuration(log.time, prevLog.time, data.video_duration)
+            ) {
+              additionalOffset = additionalOffsetVal;
+            } else {
+              console.log(data.statusLogs, index);
+            }
+            break;
+          }
+          case 'pause': {
+            var nextLog = data.statusLogs[index + 1] || null;
+            if (
+              (!!nextLog && nextLog.status === 'play')
+              && this.isGapLargerThanDuration(log.time, nextLog.time, data.video_duration)
+            ) {
+              additionalOffset = -Math.abs(additionalOffsetVal);
+            }
+            break;
+          }
+          default:
+            // 'ended' or 'timeupdate' - do nothing
+        }
+        return regularOffset + additionalOffset;
+      }.bind(this);
+
+      this.yOffset = function calcYOffset(log) {
+        return this.yScale(turnSecondsIntoDate(log.current_time));
+      }.bind(this);
+    },
+    makeLineFn: function makeLineFunction() {
+      this.line = d3.line()
+        .x(this.xOffset)
+        .y(this.yOffset);
     },
     appendAxises: function appendAxises(data, fullHeight, rangesToTruncate) {
       function getRelativeTime(log) {
@@ -615,7 +617,7 @@
         this.circleGroup =
           this.gRef
             .append('g')
-            .classed('circle-group', true);
+            .classed('js-circle-group', true);
       }
 
       var circles =
@@ -758,12 +760,13 @@
       var rangesToTruncate = this.truncate(data);
 
       this.makeScales(data, fullWidth, fullHeight, rangesToTruncate);
+      this.makeOffsets(data, radius * 2);
+      this.makeLineFn();
       this.appendAxises(data, fullHeight, rangesToTruncate);
 
       if (this.wasGraphRendered) {
         this.updateLineChart(data.statusLogs);
       } else {
-        this.createOffsets(data, radius * 2);
         this.createTooltip();
         this.createHorLine();
         this.createLineChart(data.statusLogs);
@@ -771,10 +774,7 @@
 
       this.renderGaps(data.statusLogs);
       this.renderCircles(data.statusLogs, radius);
-
-      if (rangesToTruncate.length !== 0) {
-        this.renderVerticalLines(data.statusLogs, rangesToTruncate);
-      }
+      this.renderVerticalLines(data.statusLogs, rangesToTruncate);
     },
     truncate: function shouldTruncateLineChart(data) {
       var rangesToTruncate = [];
@@ -803,10 +803,10 @@
 
   window.addEventListener('load', function initLineChart() {
     var line = new LineChart('.js-graph', 'video-stats');
-    line.render(dataWithTooMuchPause);
-    // setTimeout(function updateExample() {
-    //   line.render(exampleData);
-    // }, 1000);
+    line.render(exampleData);
+    setTimeout(function updateExample() {
+      line.render(dataWithTooMuchPause);
+    }, 1000);
   });
   /* </LINE CHART UI CLASS> */
 }(d3, fc));
