@@ -391,8 +391,6 @@
               && this.isGapLargerThanDuration(log.time, prevLog.time, data.video_duration)
             ) {
               additionalOffset = additionalOffsetVal;
-            } else {
-              console.log(data.statusLogs, index);
             }
             break;
           }
@@ -428,44 +426,65 @@
       function getAbsoluteTime(log) {
         return turnStrIntoDate(log.time);
       }
-      function calcTickValues(dataset, getTimeCallback) {
-        var randomValues = [];
-        var userValues = [];
+      function calcTickValues(dataset, getTimeCallback, tickTotal) {
+        var totalLength;
+        var intervalLength;
+        var percentage;
+        var tickValues = [];
+        var intervalTickNumber;
+        var range; // two Dates - [min, max];
+        var step;
+        var start;
+        var end;
+        function getIntervalRangeInMillis(interval) {
+          var rangeInDates = d3.extent(interval, getTimeCallback);
+          return [rangeInDates[0].getTime(), rangeInDates[1].getTime()];
+        }
+        function createTickValuesForInterval(interval) {
+          var range = getIntervalRangeInMillis(interval);
+          var intervalLength = range[1] - range[0];
+          var step = intervalLength / (tickTotal * (intervalLength / totalLength));
+          var tickValues = d3.range(range[0], range[1] + step, step);
+          return tickValues;
+        }
 
-        if (Object.prototype.toString.call(dataset[0]) === '[object Array]') {
-          dataset.forEach(function calcTicks(item) {
-            randomValues = randomValues.concat(formTickValues(
-              3,
-              0,
-              d3.min(item, getTimeCallback).getTime(),
-              d3.max(item, getTimeCallback).getTime()
-            ));
-            userValues = userValues.concat(item.map(getTimeCallback));
+        // check if graph contains gaps
+        if (Object.prototype.toString.call(dataset[0]) === '[object Array]') { // has gaps
+          totalLength = dataset.reduce(function sumAllIntervals(sum, interval) {
+            return sum + getIntervalLength(d3.extent(interval, getTimeCallback));
+          }, 0);
+
+          dataset.forEach(function calcTickValuesOfInterval(interval) {
+            range = d3.extent(interval, getTimeCallback);
+            start = range[0].getTime();
+            end = range[1].getTime();
+            intervalLength = end - start;
+            percentage = intervalLength / totalLength; // from 0(%0) to 1(100%)
+            intervalTickNumber = tickTotal * percentage;
+            step = intervalLength / intervalTickNumber;
+            tickValues = tickValues.concat(d3.range(start, end + step, step));
           });
-        } else {
-          randomValues = formTickValues(
-            3,
-            0,
-            d3.min(dataset, getTimeCallback).getTime(),
-            d3.max(dataset, getTimeCallback).getTime()
-          );
-          userValues = dataset.map(getTimeCallback);
+        } else { // no gaps
+          range = d3.extent(dataset, getTimeCallback);
+          start = range[0].getTime();
+          end = range[1].getTime();
+          totalLength = end - start;
+          step = totalLength / tickTotal;
+          tickValues = d3.range(start, end + step, step);
         }
 
-        if (randomValues.length > 5) {
-          return randomValues;
-        }
-
-        return userValues;
+        return tickValues;
       }
       function filterIntervalsOut(intervals) {
         var statusLogsInMillis = data.statusLogs.map(function mapStrToDate(log) {
-          return turnStrIntoDate(log.time).getTime();
+          return getAbsoluteTime(log).getTime();
         });
         var dataset = [];
         var startIndex = 0;
         var endIndex;
 
+        // divide dataset into ranges that do not fall into intervals
+        // this is done in order to callculate tick values properly
         intervals.forEach(function separateIntervals(interval) {
           endIndex = statusLogsInMillis.indexOf(interval[0].getTime());
           dataset.push(data.statusLogs.slice(startIndex, endIndex));
@@ -485,7 +504,7 @@
           dataset = filterIntervalsOut(intervalsToTruncate);
         }
 
-        return calcTickValues(dataset, getAbsoluteTime);
+        return calcTickValues(dataset, getAbsoluteTime, 6);
       }
       function calcYTickValues() {
         var alteredDataset = JSON.parse(JSON.stringify(data));
@@ -510,8 +529,8 @@
           });
         }
 
-        return calcTickValues(alteredDataset.statusLogs, getRelativeTime);
-      }
+        return calcTickValues(alteredDataset.statusLogs, getRelativeTime, 10);
+      }      
 
       var yAxisGen = d3.axisLeft(this.yScale)
         .tickValues(calcYTickValues())
