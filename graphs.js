@@ -298,7 +298,7 @@
       this.gRef = this.svgRef.append('g')
         .attr('transform', 'translate(' + this.margin.left + ',' + this.margin.top + ')');
     },
-    // CREATE
+    // CREATE SEPARATELY
     createTooltip: function createTooltip() {
       this.tooltip =
         d3.select(this.svgRef.node().parentElement)
@@ -340,7 +340,7 @@
           .attr('stroke-width', 2)
           .attr('fill', 'none');
     },
-    // UPDATE
+    // UPDATE SEPARATELY
     updateLineChart: function updateInstantiatedGraph(dataset) {
       var transitionLineChart = function transitionLineChart(line) {
         return function actualTransition() {
@@ -755,6 +755,28 @@
         .style('stroke-dasharray', '5, 5')
         .style('stroke-width', 2);
     },
+    replaceGapTicksWithTripleDot: function replaceGapTickValuesWithTripleDot() {
+      var tickSel = this.gRef.selectAll('.x-axis .tick');
+      this.verticalLineGroup
+        .selectAll('line')
+        .each(function matchLineToTicks() {
+          var lineX = Number(d3.select(this).attr('x1'));
+          tickSel.each(function compareTickXToLineX() {
+            // turns 'translate(1, 0)' into 1
+            var tick = d3.select(this);
+            var tickX = Number(tick.attr('transform').split(/\(|,/)[1]);
+            var rangeDiff = Math.abs(lineX - tickX);
+
+            if (rangeDiff <= 3) {
+              // close enough
+              tick
+                .select('text')
+                .style('fonts-size', '20px')
+                .text('...');
+            }
+          });
+        });
+    },
     render: function render(data) {
       if (!data || Object.prototype.toString.call(data) !== '[object Object]') {
         throw Error('Dataset doesn\'t exist or is not of the [object Object] type');
@@ -781,12 +803,12 @@
       this.renderGaps(data.statusLogs); // 2
       this.renderCircles(data.statusLogs, radius);
       this.renderVerticalLines(data.statusLogs, rangesToTruncate);
-
+      this.replaceGapTicksWithTripleDot();
       // we are checking !this.wasGraphRendered for the second time
       // in order to prevent race condition ->
-      // this.createLineChart goes first
-      // this.renderGaps goes second
-      // this.createHorLine - third
+      // this.createLineChart - first
+      // this.renderGaps      - second
+      // this.createHorLine   - third
       // we can not put this.createHorLine in the first check because of this
       if (!this.wasGraphRendered) {
         this.createHorLine(); // 3
@@ -820,10 +842,10 @@
 
   window.addEventListener('load', function initLineChart() {
     var line = new LineChart('.js-graph', 'video-stats');
-    line.render(exampleData);
-    setTimeout(function updateExample() {
-      line.render(dataWithTooMuchPause);
-    }, 1000);
+    line.render(dataWithTooMuchPause);
+    // setTimeout(function updateExample() {
+    //   line.render(exampleData2);
+    // }, 1000);
   });
   /* </LINE CHART UI CLASS> */
 }(d3, fc));
