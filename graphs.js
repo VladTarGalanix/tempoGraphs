@@ -221,6 +221,7 @@
 
     return today;
   }
+  /*
   function removeDuplicates(array) {
     var seen = {};
 
@@ -256,6 +257,7 @@
 
     return removeDuplicates(outputArray); // Set is used to remove duplicates
   }
+  */
   /* </HELPER FUNCTIONS> */
 
   /* <LINE CHART UI CLASS> */
@@ -272,7 +274,6 @@
     this.margin = {
       top: 60, right: 60, bottom: 60, left: 60
     };
-    this.wasGraphRendered = false;
 
     this.init();
   }
@@ -336,8 +337,6 @@
           .attr('stroke', 'turquoise')
           .attr('stroke-width', 2)
           .attr('fill', 'none');
-
-      this.wasGraphRendered = true;
     },
     // UPDATE
     updateLineChart: function updateInstantiatedGraph(dataset) {
@@ -428,14 +427,7 @@
       }
       function calcTickValues(dataset, getTimeCallback, tickTotal) {
         var totalLength;
-        var intervalLength;
-        var percentage;
         var tickValues = [];
-        var intervalTickNumber;
-        var range; // two Dates - [min, max];
-        var step;
-        var start;
-        var end;
         function getIntervalRangeInMillis(interval) {
           var rangeInDates = d3.extent(interval, getTimeCallback);
           return [rangeInDates[0].getTime(), rangeInDates[1].getTime()];
@@ -443,34 +435,28 @@
         function createTickValuesForInterval(interval) {
           var range = getIntervalRangeInMillis(interval);
           var intervalLength = range[1] - range[0];
-          var step = intervalLength / (tickTotal * (intervalLength / totalLength));
-          var tickValues = d3.range(range[0], range[1] + step, step);
-          return tickValues;
+          var percentage = intervalLength / totalLength;
+          var ticksPerInterval = tickTotal * percentage;
+          var step = intervalLength / ticksPerInterval;
+          return d3.range(range[0], range[1] + step, step);
         }
 
         // check if graph contains gaps
+        // if it does we need to calculate tick values for each of the intervals separately
+        // and also we need to examine the length of interval compared to the total length
+        // in order to assign appropriate amount if ticks (out of total) for the given interval
         if (Object.prototype.toString.call(dataset[0]) === '[object Array]') { // has gaps
           totalLength = dataset.reduce(function sumAllIntervals(sum, interval) {
-            return sum + getIntervalLength(d3.extent(interval, getTimeCallback));
+            var range = getIntervalRangeInMillis(interval);
+            return sum + (range[1] - range[0]);
           }, 0);
-
           dataset.forEach(function calcTickValuesOfInterval(interval) {
-            range = d3.extent(interval, getTimeCallback);
-            start = range[0].getTime();
-            end = range[1].getTime();
-            intervalLength = end - start;
-            percentage = intervalLength / totalLength; // from 0(%0) to 1(100%)
-            intervalTickNumber = tickTotal * percentage;
-            step = intervalLength / intervalTickNumber;
-            tickValues = tickValues.concat(d3.range(start, end + step, step));
+            tickValues = tickValues.concat(createTickValuesForInterval(interval));
           });
         } else { // no gaps
-          range = d3.extent(dataset, getTimeCallback);
-          start = range[0].getTime();
-          end = range[1].getTime();
-          totalLength = end - start;
-          step = totalLength / tickTotal;
-          tickValues = d3.range(start, end + step, step);
+          totalLength =
+            d3.max(dataset, getTimeCallback).getTime() - d3.min(dataset, getTimeCallback).getTime();
+          tickValues = createTickValuesForInterval(dataset);
         }
 
         return tickValues;
@@ -529,8 +515,8 @@
           });
         }
 
-        return calcTickValues(alteredDataset.statusLogs, getRelativeTime, 10);
-      }      
+        return calcTickValues(alteredDataset.statusLogs, getRelativeTime, 8);
+      }
 
       var yAxisGen = d3.axisLeft(this.yScale)
         .tickValues(calcYTickValues())
@@ -783,17 +769,27 @@
       this.makeLineFn();
       this.appendAxises(data, fullHeight, rangesToTruncate);
 
-      if (this.wasGraphRendered) {
-        this.updateLineChart(data.statusLogs);
-      } else {
+      if (!this.wasGraphRendered) {
         this.createTooltip();
-        this.createHorLine();
-        this.createLineChart(data.statusLogs);
+        this.createLineChart(data.statusLogs); // 1
+      } else {
+        this.updateLineChart(data.statusLogs);
       }
 
-      this.renderGaps(data.statusLogs);
+      this.renderGaps(data.statusLogs); // 2
       this.renderCircles(data.statusLogs, radius);
       this.renderVerticalLines(data.statusLogs, rangesToTruncate);
+
+      // we are checking !this.wasGraphRendered for the second time
+      // in order to prevent race condition ->
+      // this.createLineChart goes first
+      // this.renderGaps goes second
+      // this.createHorLine - third
+      // we can not put this.createHorLine in the first check because of this
+      if (!this.wasGraphRendered) {
+        this.createHorLine(); // 3
+        this.wasGraphRendered = true;
+      }
     },
     truncate: function shouldTruncateLineChart(data) {
       var rangesToTruncate = [];
