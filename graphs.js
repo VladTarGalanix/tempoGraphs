@@ -279,7 +279,9 @@
   }
   LineChart.prototype = {
     init: function prepareGraphForRendering() {
-      var width = Math.round(this.svgRef.node().parentElement.getBoundingClientRect().width);
+      var svgStyles = this.svgRef.node().parentElement.getBoundingClientRect();
+      var width = Math.round(svgStyles.width);
+      var height = Math.round(svgStyles.height);
       if (width > 600) {
         width = 600;
       } else if (width < 500) {
@@ -287,7 +289,7 @@
       }
 
       this.width = width;
-      this.height = width * 0.6;
+      this.height = height;
 
       this.svgRef.attr('width', this.width);
       this.svgRef.attr('height', this.height);
