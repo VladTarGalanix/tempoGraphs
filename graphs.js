@@ -779,14 +779,6 @@
       }
 
       this.renderGaps(data.statusLogs); // 2
-      this.renderCircles(data.statusLogs, radius);
-      this.renderVerticalLines(data.statusLogs, rangesToTruncate);
-
-      // put this.replaceGapTicksWithTripleDot() to the next call stack
-      // to remove a bug where replaced ... would be overwritten with previous value
-      setTimeout(function delay() {
-        this.replaceGapTicksWithTripleDot();
-      }.bind(this), 0);
 
       // we are checking !this.wasGraphRendered for the second time
       // in order to prevent race condition
@@ -798,6 +790,15 @@
         this.createHorLine(); // 3
         this.wasGraphRendered = true;
       }
+
+      // put this.replaceGapTicksWithTripleDot() to the next call stack
+      // to remove a bug where replaced '...' would be overwritten with previous value
+      setTimeout(function delayToTheNextCallStack() {
+        this.replaceGapTicksWithTripleDot();
+      }.bind(this), 0);
+
+      this.renderVerticalLines(data.statusLogs, rangesToTruncate);
+      this.renderCircles(data.statusLogs, radius);
     },
     truncate: function shouldTruncateLineChart(data) {
       var rangesToTruncate = [];
