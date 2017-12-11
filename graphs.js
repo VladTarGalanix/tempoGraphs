@@ -756,25 +756,34 @@
         .style('stroke-width', 2);
     },
     replaceGapTicksWithTripleDot: function replaceGapTickValuesWithTripleDot() {
+      var lineX;
       var tickSel = this.gRef.selectAll('.x-axis .tick');
+
+      function compareTickAndLineXPos() {
+        // turns 'translate(1, 0)' into 1
+        var tick = d3.select(this);
+        var tickX = Number(tick.attr('transform').split(/\(|,/)[1]);
+        var rangeDiff = Math.abs(lineX - tickX); // lineX is local to the outer scope
+
+        console.log(tick.style('font-size'));
+
+        if (rangeDiff <= 3) {
+          // close enough
+          tick
+            .select('text')
+            .classed('text--ellipsed', true)
+            .text('...');
+          // bug - it get's changed back to the previous value
+        } else if (tick.classed('text--ellipsed')) {
+          tick.classed('text--ellipsed', false);
+        }
+      }
+
       this.verticalLineGroup
         .selectAll('line')
         .each(function matchLineToTicks() {
-          var lineX = Number(d3.select(this).attr('x1'));
-          tickSel.each(function compareTickXToLineX() {
-            // turns 'translate(1, 0)' into 1
-            var tick = d3.select(this);
-            var tickX = Number(tick.attr('transform').split(/\(|,/)[1]);
-            var rangeDiff = Math.abs(lineX - tickX);
-
-            if (rangeDiff <= 3) {
-              // close enough
-              tick
-                .select('text')
-                .style('fonts-size', '20px')
-                .text('...');
-            }
-          });
+          lineX = Number(d3.select(this).attr('x1'));
+          tickSel.each(compareTickAndLineXPos);
         });
     },
     render: function render(data) {
@@ -803,13 +812,19 @@
       this.renderGaps(data.statusLogs); // 2
       this.renderCircles(data.statusLogs, radius);
       this.renderVerticalLines(data.statusLogs, rangesToTruncate);
-      this.replaceGapTicksWithTripleDot();
+
+      // put this.replaceGapTicksWithTripleDot() to the next call stack
+      // to remove a bug where replaced ... would be overwritten with previous value
+      setTimeout(function delay() {
+        this.replaceGapTicksWithTripleDot();
+      }.bind(this), 0);
+
       // we are checking !this.wasGraphRendered for the second time
-      // in order to prevent race condition ->
+      // in order to prevent race condition
       // this.createLineChart - first
       // this.renderGaps      - second
       // this.createHorLine   - third
-      // we can not put this.createHorLine in the first check because of this
+      // this.createHorLine in the first check because of this
       if (!this.wasGraphRendered) {
         this.createHorLine(); // 3
         this.wasGraphRendered = true;
