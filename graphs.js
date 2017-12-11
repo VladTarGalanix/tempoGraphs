@@ -196,7 +196,6 @@
   };
   /* </TEST DATASET> */
 
-
   /* <HELPER FUNCTIONS> */
   function turnStrIntoDate(dateStr) {
     // 30.11.2017 18:7:41
@@ -221,43 +220,6 @@
 
     return today;
   }
-  /*
-  function removeDuplicates(array) {
-    var seen = {};
-
-    return array.filter(function isItemADuplicate(item) {
-      if (Object.prototype.hasOwnProperty.call(seen, item)) {
-        return false;
-      }
-
-      seen[item] = true;
-
-      return true;
-    });
-  }
-  function formTickValues(finalLevel, level, prevSm, prevLg) {
-    if (level === finalLevel) {
-      return [];
-    }
-
-    var outputArray = [new Date(prevSm), new Date(prevLg)];
-    var currTick = (prevLg + prevSm) / 2;
-
-    outputArray.push(new Date(currTick));
-
-    var valuesDown = formTickValues(finalLevel, level + 1, currTick, prevLg);
-    if (valuesDown.length !== 0) {
-      outputArray = outputArray.concat(valuesDown);
-    }
-
-    var valuesUp = formTickValues(finalLevel, level + 1, prevSm, currTick);
-    if (valuesUp.length !== 0) {
-      outputArray = outputArray.concat(valuesUp);
-    }
-
-    return removeDuplicates(outputArray); // Set is used to remove duplicates
-  }
-  */
   /* </HELPER FUNCTIONS> */
 
   /* <LINE CHART UI CLASS> */
@@ -440,6 +402,7 @@
           var percentage = intervalLength / totalLength;
           var ticksPerInterval = tickTotal * percentage;
           var step = intervalLength / ticksPerInterval;
+
           return d3.range(range[0], range[1] + step, step);
         }
 
@@ -456,11 +419,20 @@
             tickValues = tickValues.concat(createTickValuesForInterval(interval));
           });
         } else { // no gaps
-          totalLength =
-            d3.max(dataset, getTimeCallback).getTime() - d3.min(dataset, getTimeCallback).getTime();
-          tickValues = createTickValuesForInterval(dataset);
-        }
+          totalLength = data.video_duration * 1000;
+          // d3.max(dataset, getTimeCallback).getTime()-d3.min(dataset, getTimeCallback).getTime();
 
+          tickValues = createTickValuesForInterval(dataset);
+          // sometimes function outputs array,
+          // which last(biggest) value is slightly bigge than the maximum,
+          // to counter that we check for this condition
+          // and if it happens we will replace it with allowed maximum
+          var maxAllowedTickValue = tickValues[0] + (data.video_duration * 1000);
+          if (tickValues[tickValues.length - 1] > maxAllowedTickValue) {
+            tickValues.pop();
+            tickValues.push(maxAllowedTickValue);
+          }
+        }
         return tickValues;
       }
       function filterIntervalsOut(intervals) {
@@ -516,7 +488,6 @@
             current_time: alteredDataset.video_duration
           });
         }
-
         return calcTickValues(alteredDataset.statusLogs, getRelativeTime, 8);
       }
 
@@ -765,8 +736,6 @@
         var tickX = Number(tick.attr('transform').split(/\(|,/)[1]);
         var rangeDiff = Math.abs(lineX - tickX); // lineX is local to the outer scope
 
-        console.log(tick.style('font-size'));
-
         if (rangeDiff <= 3) {
           // close enough
           tick
@@ -859,7 +828,7 @@
     var line = new LineChart('.js-graph', 'video-stats');
     line.render(dataWithTooMuchPause);
     // setTimeout(function updateExample() {
-    //   line.render(exampleData2);
+    //   line.render(exampleData);
     // }, 1000);
   });
   /* </LINE CHART UI CLASS> */
